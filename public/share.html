@@ -517,6 +517,16 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 
 const token = location.pathname.split('/')[2];
 
+/* ═══════════ 激活码本地绑定（模块作用域） ═══════════
+   这两个函数原先定义在 render() 函数内部，但 triggerDownload() 和
+   wireUnlock() 定义在模块顶层，根本访问不到它们 —— 结果点击「下载文件」
+   时 triggerDownload() 执行到 getBoundCode() 就抛
+   "ReferenceError: getBoundCode is not defined" 并立即中断，
+   location.href 那行永远执行不到，表现为"点击毫无反应、无任何网络请求"。
+   提到模块作用域后顶层函数才能正常取用。 */
+function getBoundCode(){ try { return localStorage.getItem('r2pan_code')?.trim().toUpperCase() || null; } catch { return null; } }
+function setBoundCode(c){ try { if(c) localStorage.setItem('r2pan_code', c.trim().toUpperCase()); else localStorage.removeItem('r2pan_code'); } catch {} }
+
 let TURSTILE_LOADED = false, turnstileReady = false, pendingCb = null;
 function loadTurnstileScript(onload){
   if(TURSTILE_LOADED){ if(window.turnstile){ window.turnstile.ready(cb=>{ turnstileReady = true; onload&&onload(cb); }); } return; }
@@ -732,8 +742,9 @@ function render(d, siteName, oauthErr, oauthProviders){
   if(d.needs_password && $('#pw')) wireUnlock(d, ts, tsEnabled, tsOnDownload, oauthEnabled, oauthAuthed, oauthProviders);
 
   // ═══════ 激活码浮动按钮 & 弹窗 ═══════
-  function getBoundCode(){ try { return localStorage.getItem('r2pan_code')?.trim().toUpperCase() || null; } catch { return null; } }
-  function setBoundCode(c){ try { if(c) localStorage.setItem('r2pan_code', c.trim().toUpperCase()); else localStorage.removeItem('r2pan_code'); } catch {} }
+  // 注意：getBoundCode / setBoundCode 已提升到模块作用域（见文件顶部
+  // 「激活码本地绑定」一节）。原先它们定义在 render() 内部，导致顶层的
+  // triggerDownload() / wireUnlock() 调用时抛 ReferenceError，下载按钮点了没反应。
 
   // 更新浮动按钮上的绑定状态 badge
   function updateCodeFloatBadge(){
